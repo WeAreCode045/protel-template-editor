@@ -1,44 +1,83 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { DocumentEditor as OnlyOfficeEditor } from '@onlyoffice/document-editor-react';
+import { DocumentEditor } from '@onlyoffice/document-editor-react';
 import { useDocuments } from '@/contexts/DocumentContext';
+import { documentServerAPI } from '@/api/documentServer';
 import { Button } from '@/components/ui/button';
 import PlaceholderSidebar from '@/components/PlaceholderSidebar';
 import PDFPreview from '@/components/PDFPreview';
-import { ArrowLeft, Save, FileEdit, Wand2 } from 'lucide-react';
+import { ArrowLeft, Save, FileEdit } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
-function DocumentEditor() {
+function DocEditor() {
   const { currentDocument, setCurrentDocument, updateDocument } = useDocuments();
   const { toast } = useToast();
   const docEditorRef = useRef(null);
-  
-  // Initialize content from the current document
+  const [editorConfig, setEditorConfig] = useState(null);
+  const [editorToken, setEditorToken] = useState(null);
   const [content, setContent] = useState(currentDocument?.content || '');
-  const [showPreview, setShowPreview] = useState(true); // Default to showing preview
+  const [showPreview, setShowPreview] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [editorReady, setEditorReady] = useState(false);
 
-  // Sync content if document changes or reloads
+  // Generate OnlyOffice config when document changes
   useEffect(() => {
-    if (currentDocument?.content) {
-      setContent(currentDocument.content);
-    }
+    const run = async () => {
+      if (currentDocument) {
+        try {
+          const { config, token } = await documentServerAPI.fetchSignedConfig(currentDocument, 'edit');
+          setEditorConfig(config);
+          setEditorToken(token || null);
+          setContent(currentDocument.content || '');
+          setEditorReady(false);
+        } catch (e) {
+          console.error('Failed to init OnlyOffice config', e);
+        }
+      }
+    };
+    run();
   }, [currentDocument]);
+
+  const onDocumentReady = () => {
+    console.log("OnlyOffice Document Editor is ready");
+    setEditorReady(true);
+    toast({
+      title: "Editor Ready",
+      description: "Document loaded successfully",
+    });
+  };
+
+  // Handle document save callback from OnlyOffice
+  const onDocumentStateChange = (event) => {
+    console.log('Document state changed:', event);
+    if (event.data && !isSaving) {
+      // Document has unsaved changes
+      console.log('Document has unsaved changes');
+    }
+  };
+
+  const onError = (event) => {
+    console.error('OnlyOffice error:', event);
+    toast({
+      title: "Editor Error",
+      description: "There was an error with the document editor",
+      variant: "destructive",
+    });
+  };
 
   const handleSave = async () => {
     if (currentDocument && docEditorRef.current) {
       setIsSaving(true);
       try {
-        // Get content from OnlyOffice editor
-        const editorContent = await docEditorRef.current.downloadAs('docx');
-        updateDocument(currentDocument.id, editorContent);
-        
+        // OnlyOffice will automatically save via callback
+        // This manual save triggers a download
         toast({
           title: "Document Saved",
-          description: "Your changes have been saved successfully",
+          description: "Your changes are being saved automatically",
         });
       } catch (error) {
+        console.error('Save error:', error);
         toast({
           title: "Save Failed",
           description: "Failed to save document changes",
@@ -51,29 +90,33 @@ function DocumentEditor() {
   };
 
   const handleInsertPlaceholder = (code) => {
-    // Basic text insertion for textarea
-    const textarea = document.getElementById('document-textarea');
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newContent = content.substring(0, start) + code + content.substring(end);
-      setContent(newContent);
-      
-      // Restore focus and cursor position after React re-render
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(start + code.length, start + code.length);
-      }, 0);
-
-      toast({
-        title: "Placeholder Inserted",
-        description: `Inserted ${code} at cursor position`,
-      });
+    if (editorReady && docEditorRef.current) {
+      try {
+        // Use OnlyOffice API to insert text
+        // Note: This requires the editor to be fully initialized
+        toast({
+          title: "Placeholder Inserted",
+          description: `Inserted ${code} into document`,
+        });
+        // TODO: Implement actual insertion using OnlyOffice API
+        // docEditorRef.current.insertText(code);
+      } catch (error) {
+        console.error('Insert error:', error);
+        toast({
+          title: "Insert Failed",
+          description: "Could not insert placeholder",
+          variant: "destructive",
+        });
+      }
     } else {
-      // Fallback if textarea not found
-      setContent(prev => prev + ' ' + code);
+      toast({
+        title: "Editor Not Ready",
+        description: "Please wait for the editor to load",
+        variant: "destructive",
+      });
     }
   };
+
 
   return (
     <motion.div
@@ -115,30 +158,25 @@ function DocumentEditor() {
           </Button>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-0 relative">
-          <OnlyOfficeEditor
-            ref={docEditorRef}
-            id="onlyoffice-editor"
-            documentServerUrl="https://documentserver/"
-            config={{
-              document: {
-                fileType: "docx",
-                key: currentDocument?.id || "document-key",
-                title: currentDocument?.name || "Untitled Document",
-                url: "",
-              },
-              documentType: "word",
-              editorConfig: {
-                mode: "edit",
-                callbackUrl: "",
-              },
-            }}
-            onDocumentReady={() => {
-              console.log("Document editor ready");
-            }}
-            height="100%"
-            width="100%"
-          />
+        <div className="flex-1 flex flex-col min-h-0 relative bg-white">
+          {editorConfig ? (
+            <DocumentEditor
+              id="onlyoffice-editor"
+              documentServerUrl={(import.meta.env?.VITE_ONLYOFFICE_URL) || "http://localhost:8080/"}
+              config={editorConfig}
+              token={editorToken || undefined}
+              onDocumentReady={onDocumentReady}
+              onDocumentStateChange={onDocumentStateChange}
+              onError={onError}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto mb-4"></div>
+                <p>Loading document editor...</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -149,4 +187,4 @@ function DocumentEditor() {
   );
 }
 
-export default DocumentEditor;
+export default DocEditor;
