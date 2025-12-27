@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        VITE_ONLYOFFICE_URL: ${VITE_ONLYOFFICE_URL}
+    container_name: protel-template-app
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
+      - ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET}
+      - STORAGE_DIR=/app/storage
+      - VITE_ONLYOFFICE_URL=${VITE_ONLYOFFICE_URL}
+    ports:
+      - "5174:5174"
+    volumes:
+      - app_storage:/app/storage
+    networks:
+      - onlyoffice_net
+
+  documentserver:
+    image: onlyoffice/documentserver:latest
+    container_name: onlyoffice-documentserver
+    env_file:
+      - .env
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=${ONLYOFFICE_JWT_SECRET}
+      - JWT_HEADER=Authorization
+    ports:
+      - "8080:80"
+    networks:
+      - onlyoffice_net
+
+networks:
+  onlyoffice_net:
+    driver: bridge
+
+volumes:
+  app_storage: {}
