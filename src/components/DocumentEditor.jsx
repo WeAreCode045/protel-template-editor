@@ -1,6 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { DocumentEditor as OnlyOfficeEditor } from '@onlyoffice/document-editor-react';
 import { useDocuments } from '@/contexts/DocumentContext';
 import { Button } from '@/components/ui/button';
 import PlaceholderSidebar from '@/components/PlaceholderSidebar';
@@ -11,6 +12,7 @@ import { useToast } from '@/components/ui/use-toast';
 function DocumentEditor() {
   const { currentDocument, setCurrentDocument, updateDocument } = useDocuments();
   const { toast } = useToast();
+  const docEditorRef = useRef(null);
   
   // Initialize content from the current document
   const [content, setContent] = useState(currentDocument?.content || '');
@@ -25,15 +27,26 @@ function DocumentEditor() {
   }, [currentDocument]);
 
   const handleSave = async () => {
-    if (currentDocument) {
+    if (currentDocument && docEditorRef.current) {
       setIsSaving(true);
-      // Simulate network delay for better UX feel
-      await new Promise(resolve => setTimeout(resolve, 500));
-      updateDocument(currentDocument.id, content);
-      setIsSaving(false);
-      
-      // Force refresh preview by toggling visible state briefly or rely on prop update
-      // Since PDFPreview watches 'content' prop when 'show' is true, it should update automatically
+      try {
+        // Get content from OnlyOffice editor
+        const editorContent = await docEditorRef.current.downloadAs('docx');
+        updateDocument(currentDocument.id, editorContent);
+        
+        toast({
+          title: "Document Saved",
+          description: "Your changes have been saved successfully",
+        });
+      } catch (error) {
+        toast({
+          title: "Save Failed",
+          description: "Failed to save document changes",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -102,25 +115,30 @@ function DocumentEditor() {
           </Button>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-0 relative group">
-          <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className="bg-black/50 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
-              Markdown / Text Editor
-            </span>
-          </div>
-          <textarea
-            id="document-textarea"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Start typing your document content here..."
-            className="flex-1 w-full p-6 bg-white/5 border-none text-white placeholder-gray-500 focus:outline-none resize-none font-mono text-sm leading-relaxed"
-            spellCheck="false"
+        <div className="flex-1 flex flex-col min-h-0 relative">
+          <OnlyOfficeEditor
+            ref={docEditorRef}
+            id="onlyoffice-editor"
+            documentServerUrl="https://documentserver/"
+            config={{
+              document: {
+                fileType: "docx",
+                key: currentDocument?.id || "document-key",
+                title: currentDocument?.name || "Untitled Document",
+                url: "",
+              },
+              documentType: "word",
+              editorConfig: {
+                mode: "edit",
+                callbackUrl: "",
+              },
+            }}
+            onDocumentReady={() => {
+              console.log("Document editor ready");
+            }}
+            height="100%"
+            width="100%"
           />
-        </div>
-        
-        <div className="bg-white/5 px-4 py-2 border-t border-white/20 text-xs text-gray-400 flex justify-between items-center">
-           <span>{content.length} characters</span>
-           <span className="flex items-center gap-1"><Wand2 className="w-3 h-3"/> Auto-preview enabled</span>
         </div>
       </div>
 
