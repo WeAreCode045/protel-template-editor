@@ -1,0 +1,5 @@
+## Pages
+- [Admin Panel - Document Management System](/adminpanel): Manage placeholders, users, and system settings
+- [Dashboard - Document Management System](/dashboard): Manage your documents, collaborate with your team, and edit documents in real-time
+- [Login - Document Management System](/auth): Sign in to access your documents and collaborative editing tools
+- [Settings - Document Management System](/settings): Manage your account settings and preferences
