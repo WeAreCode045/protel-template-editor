@@ -5,10 +5,13 @@
   "private": true,
   "scripts": {
     "dev": "vite --host :: --port 3000",
+    "server": "node server/index.js",
+    "dev:full": "concurrently -k -n server,web -c blue,green \"node server/index.js\" \"vite --host :: --port 3000\"",
     "build": "node tools/generate-llms.js || true && vite build",
     "preview": "vite preview --host :: --port 3000"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
     "@onlyoffice/document-editor-react": "^1.3.0",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-avatar": "^1.1.2",
@@ -46,6 +49,11 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "terser": "^5.37.0",
-    "vite": "^4.4.5"
+    "vite": "^4.4.5",
+    "concurrently": "^9.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.2"
   }
 }
