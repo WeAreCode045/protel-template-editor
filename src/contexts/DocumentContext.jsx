@@ -57,7 +57,7 @@ export const DocumentProvider = ({ children }) => {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       // Simulate content extraction for the demo editor
       const initialEditorContent = `Document: ${file.name}
       
@@ -70,6 +70,7 @@ Section 2: Terms
 The total value of this contract is $amount.total.
       `;
 
+      // Create basic local doc
       const newDoc = {
         id: Date.now().toString(),
         name: file.name,
@@ -81,7 +82,22 @@ The total value of this contract is $amount.total.
         uploadedAt: new Date().toISOString(),
         lastModified: new Date().toISOString()
       };
-      
+      // Also send to backend for OnlyOffice to fetch via HTTP
+      try {
+        const resp = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: newDoc.id, name: newDoc.name, type: newDoc.type, base64: newDoc.fileData })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          newDoc.serverId = data.id;
+          newDoc.fileUrl = data.downloadUrl;
+        }
+      } catch (err) {
+        console.warn('Backend upload failed; editor may not load via Document Server.', err);
+      }
+
       const updatedDocs = [...documents, newDoc];
       setDocuments(updatedDocs);
       localStorage.setItem('dms_documents', JSON.stringify(updatedDocs));
@@ -104,10 +120,15 @@ The total value of this contract is $amount.total.
     return true;
   };
 
-  const updateDocument = (docId, content) => {
+  const updateDocument = (docId, content, fileData = null) => {
     const updatedDocs = documents.map(doc => 
       doc.id === docId 
-        ? { ...doc, content, lastModified: new Date().toISOString() }
+        ? { 
+            ...doc, 
+            content, 
+            ...(fileData && { fileData }), // Update fileData if provided
+            lastModified: new Date().toISOString() 
+          }
         : doc
     );
     setDocuments(updatedDocs);
@@ -115,7 +136,12 @@ The total value of this contract is $amount.total.
     
     // Also update the current document if it's the one being edited
     if (currentDocument && currentDocument.id === docId) {
-      setCurrentDocument(prev => ({ ...prev, content, lastModified: new Date().toISOString() }));
+      setCurrentDocument(prev => ({ 
+        ...prev, 
+        content, 
+        ...(fileData && { fileData }),
+        lastModified: new Date().toISOString() 
+      }));
     }
     
     toast({
